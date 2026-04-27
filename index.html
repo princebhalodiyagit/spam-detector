@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SMS Spam Detector</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+    }
+
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 32px;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .header { text-align: center; margin-bottom: 28px; }
+    .header h1 { font-size: 26px; font-weight: 700; color: #fff; }
+    .header p  { font-size: 14px; color: #888; margin-top: 6px; }
+
+    label { font-size: 13px; color: #aaa; display: block; margin-bottom: 8px; }
+
+    textarea {
+      width: 100%; min-height: 110px; background: #111;
+      border: 1px solid #333; border-radius: 10px;
+      color: #f0f0f0; font-size: 15px; padding: 12px;
+      resize: vertical; font-family: inherit; line-height: 1.6;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { outline: none; border-color: #555; }
+    textarea::placeholder { color: #444; }
+
+    .stat-row {
+      display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;
+    }
+    .stat-pill {
+      font-size: 12px; color: #888; background: #111;
+      border: 1px solid #2a2a2a; padding: 3px 10px;
+      border-radius: 20px;
+    }
+    .stat-pill span { color: #ccc; font-weight: 600; }
+
+    .sms-bar { display: flex; gap: 4px; margin-top: 8px; }
+    .sms-seg {
+      height: 5px; flex: 1; border-radius: 3px; background: #222;
+    }
+    .sms-seg.filled { background: #3b82f6; }
+    .sms-seg.warn   { background: #f59e0b; }
+    .sms-seg.over   { background: #ef4444; }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 14px; }
+
+    button {
+      padding: 10px 24px; border-radius: 8px; font-size: 14px;
+      font-family: inherit; cursor: pointer; border: none;
+      font-weight: 600; transition: all 0.15s;
+    }
+    #scan-btn {
+      background: #ef4444; color: white; flex: 1;
+    }
+    #scan-btn:hover { background: #dc2626; }
+    #scan-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    #clear-btn {
+      background: #222; color: #aaa; border: 1px solid #333;
+    }
+    #clear-btn:hover { background: #2a2a2a; }
+
+    .examples { margin-top: 16px; }
+    .examples-label { font-size: 12px; color: #555; margin-bottom: 8px; }
+    .example-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .example-pill {
+      font-size: 12px; padding: 4px 12px; border-radius: 20px;
+      cursor: pointer; border: 1px solid #2a2a2a; color: #666;
+      background: #111; transition: all 0.1s; white-space: nowrap;
+      max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .example-pill:hover { border-color: #444; color: #ccc; }
+
+    .divider { border: none; border-top: 1px solid #222; margin: 24px 0; }
+
+    .result-section { display: none; }
+
+    .verdict-box {
+      border-radius: 10px; padding: 14px 18px;
+      font-size: 18px; font-weight: 700; text-align: center;
+      margin-bottom: 20px;
+    }
+    .verdict-spam { background: #2a0d0d; color: #f87171; border: 1px solid #7f1d1d; }
+    .verdict-ham  { background: #0d2a14; color: #4ade80; border: 1px solid #14532d; }
+    .verdict-unknown { background: #1a1a00; color: #facc15; border: 1px solid #713f12; }
+
+    .section-title {
+      font-size: 13px; font-weight: 600; color: #aaa;
+      margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+
+    /* Confidence bars */
+    .conf-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .conf-label-txt { font-size: 13px; color: #888; min-width: 50px; }
+    .conf-track {
+      flex: 1; background: #222; border-radius: 6px;
+      height: 20px; overflow: hidden;
+    }
+    .conf-fill {
+      height: 100%; border-radius: 6px; display: flex;
+      align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: white;
+      transition: width 0.6s ease; min-width: 0;
+    }
+    .fill-spam { background: #ef4444; }
+    .fill-ham  { background: #22c55e; }
+    .conf-pct  { font-size: 13px; font-weight: 700; min-width: 36px; text-align: right; }
+    .pct-spam  { color: #f87171; }
+    .pct-ham   { color: #4ade80; }
+
+    /* Stats grid */
+    .stats-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px; margin-bottom: 12px;
+    }
+    .stat-card {
+      background: #111; border: 1px solid #2a2a2a;
+      border-radius: 10px; padding: 12px; text-align: center;
+    }
+    .stat-card .val { font-size: 24px; font-weight: 700; color: #fff; }
+    .stat-card .lbl { font-size: 12px; color: #666; margin-top: 2px; }
+    .stat-card .sub { font-size: 11px; color: #444; margin-top: 2px; }
+
+    .parts-box {
+      background: #111; border: 1px solid #2a2a2a;
+      border-radius: 10px; padding: 12px;
+    }
+    .parts-lbl { font-size: 12px; color: #666; margin-bottom: 8px; }
+    .parts-segs { display: flex; gap: 5px; }
+    .parts-seg {
+      height: 10px; flex: 1; border-radius: 3px; background: #222;
+    }
+    .parts-seg.on { background: #3b82f6; }
+
+    /* Red flags */
+    .flags-list { display: flex; flex-direction: column; gap: 6px; }
+    .flag-item {
+      background: #1a0d0d; border: 1px solid #3a1a1a;
+      border-radius: 8px; padding: 8px 12px;
+      font-size: 13px; color: #f87171;
+    }
+    .no-flags {
+      background: #0d1a0d; border: 1px solid #1a3a1a;
+      border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; color: #4ade80;
+    }
+
+    .loading {
+      text-align: center; padding: 20px; color: #555;
+      font-size: 14px; display: none;
+    }
+    .dot { animation: blink 1s step-end infinite; display: inline-block; }
+    .dot:nth-child(2) { animation-delay: 0.2s; }
+    .dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%,100%{opacity:0.2} 50%{opacity:1} }
+
+    footer {
+      margin-top: 32px; font-size: 12px; color: #333; text-align: center;
+    }
+    footer a { color: #444; text-decoration: none; }
+    footer a:hover { color: #666; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <div class="header">
+    <h1>📱 SMS Spam Detector</h1>
+    <p>Naive Bayes + TF-IDF · Trained on UCI SMS Spam Collection</p>
+  </div>
+
+  <label>Message</label>
+  <textarea id="sms-input" placeholder="Type or paste your SMS message here…"></textarea>
+
+  <div class="stat-row">
+    <div class="stat-pill">Chars: <span id="char-count">0</span></div>
+    <div class="stat-pill">Words: <span id="word-count">0</span></div>
+    <div class="stat-pill">Sentences: <span id="sent-count">0</span></div>
+    <div class="stat-pill">SMS parts: <span id="sms-parts">0</span></div>
+  </div>
+  <div class="sms-bar" id="sms-bar">
+    <div class="sms-seg"></div><div class="sms-seg"></div>
+    <div class="sms-seg"></div><div class="sms-seg"></div>
+    <div class="sms-seg"></div>
+  </div>
+
+  <div class="btn-row">
+    <button id="scan-btn" disabled>🔍 Scan for Spam</button>
+    <button id="clear-btn">Clear</button>
+  </div>
+
+  <div class="examples">
+    <div class="examples-label">Try an example</div>
+    <div class="example-pills" id="example-pills"></div>
+  </div>
+
+  <hr class="divider"/>
+
+  <div class="loading" id="loading">
+    Analysing<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
+  </div>
+
+  <div class="result-section" id="results">
+    <div class="verdict-box" id="verdict-box"></div>
+
+    <div class="section-title" style="margin-top:20px;">📊 Confidence Meter</div>
+    <div class="conf-row">
+      <span class="conf-label-txt">🟢 Ham</span>
+      <div class="conf-track"><div class="conf-fill fill-ham" id="ham-bar" style="width:0%"></div></div>
+      <span class="conf-pct pct-ham" id="ham-pct">0%</span>
+    </div>
+    <div class="conf-row">
+      <span class="conf-label-txt">🔴 Spam</span>
+      <div class="conf-track"><div class="conf-fill fill-spam" id="spam-bar" style="width:0%"></div></div>
+      <span class="conf-pct pct-spam" id="spam-pct">0%</span>
+    </div>
+
+    <div class="section-title" style="margin-top:20px;">📱 SMS Length & Word Count</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="val" id="r-chars">0</div>
+        <div class="lbl">Characters</div>
+        <div class="sub" id="r-length">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" id="r-words">0</div>
+        <div class="lbl">Words</div>
+        <div class="sub" id="r-avgword">—</div>
+      </div>
+      <div class="stat-card">
+        <div class="val" id="r-sents">0</div>
+        <div class="lbl">Sentences</div>
+      </div>
+    </div>
+    <div class="parts-box">
+      <div class="parts-lbl">SMS parts used: <strong id="r-parts">0</strong> &nbsp;(1 part = 160 chars, multipart = 153 each)</div>
+      <div class="parts-segs" id="r-parts-bar"></div>
+    </div>
+
+    <div class="section-title" style="margin-top:20px;">🚨 Red Flags</div>
+    <div class="flags-list" id="flags-list"></div>
+  </div>
+</div>
+
+<footer>
+  Powered by <a href="https://huggingface.co/spaces/huggingfacedev12/spam-detector" target="_blank">Hugging Face Space</a>
+  · Built with Gradio + Vercel
+</footer>
+
+<script>
+const EXAMPLES = [
+  { label: "Prize winner",    text: "WINNER!! You have been selected for a FREE prize. Call now!" },
+  { label: "Friendly text",   text: "Hey, are you coming to the party tonight? Let me know." },
+  { label: "Lottery scam",    text: "Congratulations! Your mobile number won 500 pounds. Text CLAIM to 87575." },
+  { label: "Normal errand",   text: "Can you pick up some milk on your way home?" },
+  { label: "Account alert",   text: "URGENT: Your account has been compromised. Call 0800-FREE now." },
+];
+
+const input    = document.getElementById('sms-input');
+const scanBtn  = document.getElementById('scan-btn');
+const clearBtn = document.getElementById('clear-btn');
+const loading  = document.getElementById('loading');
+const results  = document.getElementById('results');
+
+// ── Live stats ────────────────────────────────────────────────────────────────
+function updateStats() {
+  const text = input.value;
+  const chars = text.length;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const sents = text.trim() ? text.split(/[.!?]+/).filter(s => s.trim()).length : 0;
+  const parts = chars === 0 ? 0 : chars <= 160 ? 1 : Math.ceil(chars / 153);
+
+  document.getElementById('char-count').textContent = chars;
+  document.getElementById('word-count').textContent = words;
+  document.getElementById('sent-count').textContent = sents;
+  document.getElementById('sms-parts').textContent  = parts;
+
+  const segs = document.querySelectorAll('.sms-bar .sms-seg');
+  segs.forEach((seg, i) => {
+    seg.className = 'sms-seg';
+    if (chars > i * 160) {
+      seg.classList.add('filled');
+      seg.classList.add(chars <= 160 ? '' : chars <= 480 ? 'warn' : 'over');
+    }
+  });
+
+  scanBtn.disabled = chars === 0;
+}
+input.addEventListener('input', updateStats);
+
+// ── Examples ──────────────────────────────────────────────────────────────────
+const pillsWrap = document.getElementById('example-pills');
+EXAMPLES.forEach(ex => {
+  const btn = document.createElement('button');
+  btn.className = 'example-pill';
+  btn.textContent = ex.label;
+  btn.onclick = () => { input.value = ex.text; updateStats(); results.style.display = 'none'; };
+  pillsWrap.appendChild(btn);
+});
+
+// ── Clear ─────────────────────────────────────────────────────────────────────
+clearBtn.onclick = () => {
+  input.value = '';
+  updateStats();
+  results.style.display = 'none';
+  loading.style.display = 'none';
+};
+
+// ── Red flags (client-side) ───────────────────────────────────────────────────
+function findRedFlags(text) {
+  const flags = [];
+  const lower = text.toLowerCase();
+  if (/\bfree\b/.test(lower))                     flags.push("🚩 Contains FREE");
+  if (/\b(win|winner|won)\b/.test(lower))         flags.push("🚩 Win/Winner language");
+  if (/\b(prize|reward|gift)\b/.test(lower))      flags.push("🚩 Prize/reward bait");
+  if (/\b(urgent|act now|limited)\b/.test(lower)) flags.push("🚩 Urgency trigger");
+  if (/\b(claim|apply now)\b/.test(lower))        flags.push("🚩 Claim/Apply CTA");
+  if ((text.match(/!/g) || []).length >= 2)        flags.push("🚩 Excessive exclamation marks");
+  if ([...text].filter(c => c >= 'A' && c <= 'Z').length / Math.max(text.length,1) > 0.35)
+    flags.push("🚩 Excessive CAPS");
+  if (/https?:\/\/|www\./.test(lower))            flags.push("🚩 Suspicious URL");
+  if (/\b0\d{9,10}\b|\b\+\d{10,13}\b/.test(text)) flags.push("🚩 Unusual phone number");
+  if (/[£€$]\d+/.test(text))                      flags.push("🚩 Currency/money mention");
+  return flags.slice(0, 5);
+}
+
+// ── Scan ──────────────────────────────────────────────────────────────────────
+scanBtn.onclick = async () => {
+  const text = input.value.trim();
+  if (!text) return;
+
+  scanBtn.disabled = true;
+  loading.style.display = 'block';
+  results.style.display = 'none';
+
+  try {
+    const res  = await fetch('/api/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text }),
+    });
+    const data = await res.json();
+    const raw  = data.result || data.error || "No result";
+
+    // Parse P(Spam) and P(Ham) from the result string
+    // Format: "Result: SPAM | Confidence: 99.6% | P(Spam): 99.6% | P(Ham): 0.4%"
+    const spamMatch = raw.match(/P\(Spam\):\s*([\d.]+)%/);
+    const hamMatch  = raw.match(/P\(Ham\):\s*([\d.]+)%/);
+    const isSpam    = raw.includes("SPAM");
+
+    const spamPct = spamMatch ? parseFloat(spamMatch[1]) : (isSpam ? 90 : 10);
+    const hamPct  = hamMatch  ? parseFloat(hamMatch[1])  : (isSpam ? 10 : 90);
+
+    // Verdict
+    const verdictBox = document.getElementById('verdict-box');
+    if (isSpam) {
+      verdictBox.className = 'verdict-box verdict-spam';
+      verdictBox.textContent = spamPct >= 85
+        ? `🔴 SPAM — Very likely spam (${spamPct}% confidence)`
+        : spamPct >= 65
+        ? `🟠 SPAM — Probably spam (${spamPct}% confidence)`
+        : `🟡 SPAM — Possibly spam (${spamPct}% confidence)`;
+    } else {
+      verdictBox.className = 'verdict-box verdict-ham';
+      verdictBox.textContent = hamPct >= 85
+        ? `🟢 HAM — Very likely legitimate (${hamPct}% confidence)`
+        : hamPct >= 65
+        ? `🟢 HAM — Probably legitimate (${hamPct}% confidence)`
+        : `🟡 HAM — Borderline (${hamPct}% confidence)`;
+    }
+
+    // Confidence bars
+    document.getElementById('spam-bar').style.width = spamPct + '%';
+    document.getElementById('ham-bar').style.width  = hamPct  + '%';
+    document.getElementById('spam-bar').textContent = spamPct > 10 ? spamPct + '%' : '';
+    document.getElementById('ham-bar').textContent  = hamPct  > 10 ? hamPct  + '%' : '';
+    document.getElementById('spam-pct').textContent = spamPct + '%';
+    document.getElementById('ham-pct').textContent  = hamPct  + '%';
+
+    // SMS stats
+    const chars = text.length;
+    const words = text.trim().split(/\s+/).length;
+    const sents = text.split(/[.!?]+/).filter(s => s.trim()).length;
+    const parts = chars === 0 ? 0 : chars <= 160 ? 1 : Math.ceil(chars / 153);
+    const avgWL = words ? (text.split(/\s+/).reduce((a,w)=>a+w.length,0)/words).toFixed(1) : 0;
+    const lenLabel = chars <= 80 ? 'Short' : chars <= 160 ? 'Typical' : 'Long (multi-part)';
+
+    document.getElementById('r-chars').textContent   = chars;
+    document.getElementById('r-words').textContent   = words;
+    document.getElementById('r-sents').textContent   = sents;
+    document.getElementById('r-parts').textContent   = parts;
+    document.getElementById('r-length').textContent  = lenLabel;
+    document.getElementById('r-avgword').textContent = `avg ${avgWL} chars/word`;
+
+    const partsBar = document.getElementById('r-parts-bar');
+    partsBar.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+      const seg = document.createElement('div');
+      seg.className = 'parts-seg' + (i < parts ? ' on' : '');
+      partsBar.appendChild(seg);
+    }
+
+    // Red flags
+    const flags = findRedFlags(text);
+    const flagsList = document.getElementById('flags-list');
+    flagsList.innerHTML = '';
+    if (flags.length) {
+      flags.forEach(f => {
+        const div = document.createElement('div');
+        div.className = 'flag-item';
+        div.textContent = f;
+        flagsList.appendChild(div);
+      });
+    } else {
+      flagsList.innerHTML = '<div class="no-flags">✅ No obvious spam signals detected.</div>';
+    }
+
+    results.style.display = 'block';
+  } catch (err) {
+    alert('Something went wrong: ' + err.message);
+  } finally {
+    loading.style.display = 'none';
+    scanBtn.disabled = false;
+  }
+};
+</script>
+</body>
+</html>
