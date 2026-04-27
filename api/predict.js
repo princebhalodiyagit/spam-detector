@@ -21,10 +21,15 @@ export default async function handler(req, res) {
       }
     );
 
+    if (!response.ok) {
+      const text = await response.text();
+      return res.status(500).json({ error: "HF error: " + text });
+    }
+
     const json = await response.json();
     const raw = json.data?.[0] ?? "No result";
     return res.status(200).json({ result: raw });
   } catch (err) {
-    return res.status(500).json({ error: "Failed to reach model: " + err.message });
+    return res.status(500).json({ error: "Failed: " + err.message });
   }
 }
